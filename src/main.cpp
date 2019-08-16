@@ -1,7 +1,10 @@
 #include <bmp.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include <cmath>
 #include <random>
+#include <perspective.h>
 #include "TestModel.h"
 
 using namespace std;
@@ -37,7 +40,7 @@ float pitch = 0;
 #define PITCH(x, dt) (pitch += (SCREEN_WIDTH / 2.0f - x) * PI * 0.001f * dt / (SCREEN_WIDTH))
 #define YAW(y, dt) (yaw += (y - SCREEN_HEIGHT / 2.0f) * PI * 0.001f * dt / (SCREEN_HEIGHT))
 
-vec3 cameraPos( 0, 0, -3 );
+vec3 cameraPos( -1, 0, -3 );
 
 mat3 R; // Y * P
 mat3 Y; // Yaw rotation matrix (around y axis)
@@ -84,22 +87,36 @@ int main( int argc, char* argv[] )
 
 void Draw()
 {
+	mat4 cameraToWorld;
+	cout << "init " << glm::to_string(cameraToWorld) << endl;
+	cameraToWorld = glm::scale(cameraToWorld, vec3(1,1,1));
+	cout << "mid " << glm::to_string(cameraToWorld) << endl;
+	cameraToWorld = glm::translate(cameraToWorld, cameraPos); // translation is put into last column -- only projections are in last row
+	cout << "transformed " << glm::to_string(cameraToWorld) << endl;
+	cout << "transformed, last column " << glm::to_string(cameraToWorld[3]) << endl;
+
+	mat2 screenWindow = mat2();
+	screenWindow[0] = vec2(-1, -1); // bottom left corner of screen in screen space
+	screenWindow[1] = vec2(2, 2);
+
+	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0, focalLength, 90, image);
     for( int y=0; y<SCREEN_HEIGHT; ++y )
 	{
 		for( int x=0; x<SCREEN_WIDTH; ++x )
 		{
-			vec3 dir(
-						x-SCREEN_WIDTH/2.0f, 
-						y-SCREEN_HEIGHT/2.0f, 
-						focalLength
-					); 
+			CameraSample sample;
+			sample.pFilm = vec2(x, y);
+			sample.time = 0;
 
-			dir = dir;
-			dir = R * dir; // direction is rotated by camera rotation matrix
+			Ray r;
+
+			c->GenerateRay(sample, r);
+
+			// cout << "vec4(" << r.d.x << "," << r.d.y << "," << r.d.z << "," << r.d.w << ")" << endl;
 
 			vec3 color( 0, 0, 0 );
 			Intersection inter;
-			if(ClosestIntersection(cameraPos, dir, triangles, inter)){
+			if(ClosestIntersection(vec3(r.o.x, r.o.y, r.o.z), vec3(r.d.x, r.d.y, r.d.z), triangles, inter)){
                 // This is the sequential form of division by numSamples.
                 // connect() calculates a multi-sample estimator from 
                 // the two paths using multiple importance sampling 

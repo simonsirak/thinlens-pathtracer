@@ -10,14 +10,16 @@ SET(GCC_COVERAGE_COMPILE_FLAGS "-std=c++11 -O3")
 add_definitions(${GCC_COVERAGE_COMPILE_FLAGS})
 
 # Add subdirectory (will invoke CMakeLists.txt in that dir)
-# But since we won't build anything, this is useless; it won't 
-# carry over any included stuff.
-add_subdirectory("includes")
+# This will recurse into that dir, run its CMakeLists.txt, 
+# then proceed here.
+add_subdirectory("camera")
 
 # include stuff we wanna include for processing of THIS 
 # CMakeLists.txt
 include_directories("${PROJECT_SOURCE_DIR}/includes/glm")
 include_directories("${PROJECT_SOURCE_DIR}/includes/bmp")
+include_directories("${PROJECT_SOURCE_DIR}/camera")
  
 # add the executable
 add_executable(ThinLensPT main.cpp)
+target_link_libraries(ThinLensPT Camera)

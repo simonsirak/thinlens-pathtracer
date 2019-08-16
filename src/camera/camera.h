@@ -6,7 +6,7 @@
 
 using glm::mat4;
 using glm::vec2;
-using glm::vec3;
+using glm::vec4;
 
 struct CameraSample {
     vec2 pFilm;
@@ -15,21 +15,33 @@ struct CameraSample {
 };
 
 struct Ray {
-    vec3 o;
-    vec3 d;
-}
+    vec4 o;
+    vec4 d;
+    mutable float t; // distance along the direction, [0, infinity)
+};
+
+struct RayDifferential : public Ray {
+    // initially, RayDifferentials have no differentials
+    bool hasDifferentials;
+
+    // origin and direction for differentials
+    vec4 rxo;
+    vec4 ryo;
+    vec4 rxd;
+    vec4 ryd;
+};
 
 class Camera {    
 public:
     mat4 cameraToWorld;
     float shutterOpen;
     float shutterClose;
-    bitmap_image film;
+    const bitmap_image& film;
 
     Camera(const mat4& cameraToWorld, 
             float shutterOpen, 
             float shutterClose, 
-            bitmap_image film);
+            const bitmap_image& film);
 
     /* 
         GenerateRay takes a given space-time CameraSample
@@ -42,9 +54,9 @@ public:
     virtual float GenerateRay(const CameraSample& sample, Ray& ray) const = 0;
 
     /* TODO */
-    //virtual float GenerateRayDifferential(const CameraSample& sample, RayDifferential& rd);
+    virtual float GenerateRayDifferential(const CameraSample& sample, RayDifferential& rd);
 
     virtual ~Camera();
-}
+};
 
 #endif
