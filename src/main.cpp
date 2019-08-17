@@ -40,7 +40,7 @@ float pitch = 0;
 #define PITCH(x, dt) (pitch += (SCREEN_WIDTH / 2.0f - x) * PI * 0.001f * dt / (SCREEN_WIDTH))
 #define YAW(y, dt) (yaw += (y - SCREEN_HEIGHT / 2.0f) * PI * 0.001f * dt / (SCREEN_HEIGHT))
 
-vec3 cameraPos( -1, 0, -3 );
+vec3 cameraPos( 0, 0, 0 );
 
 mat3 R; // Y * P
 mat3 Y; // Yaw rotation matrix (around y axis)
@@ -88,16 +88,14 @@ int main( int argc, char* argv[] )
 void Draw()
 {
 	mat4 cameraToWorld;
-	cout << "init " << glm::to_string(cameraToWorld) << endl;
-	cameraToWorld = glm::scale(cameraToWorld, vec3(1,1,1));
-	cout << "mid " << glm::to_string(cameraToWorld) << endl;
 	cameraToWorld = glm::translate(cameraToWorld, cameraPos); // translation is put into last column -- only projections are in last row
-	cout << "transformed " << glm::to_string(cameraToWorld) << endl;
-	cout << "transformed, last column " << glm::to_string(cameraToWorld[3]) << endl;
 
 	mat2 screenWindow = mat2();
-	screenWindow[0] = vec2(-1, -1); // bottom left corner of screen in screen space
-	screenWindow[1] = vec2(2, 2);
+	screenWindow[0][0] = -1;
+	screenWindow[0][1] = 1; // top left corner of window on image plane in screen space
+
+	screenWindow[1][0] = 2;
+	screenWindow[1][1] = 2; // width and height of window on image plane in screen space
 
 	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0, focalLength, 90, image);
     for( int y=0; y<SCREEN_HEIGHT; ++y )
@@ -105,7 +103,7 @@ void Draw()
 		for( int x=0; x<SCREEN_WIDTH; ++x )
 		{
 			CameraSample sample;
-			sample.pFilm = vec2(x, y);
+			sample.pFilm = vec2(x + 0.5f, y + 0.5f);
 			sample.time = 0;
 
 			Ray r;

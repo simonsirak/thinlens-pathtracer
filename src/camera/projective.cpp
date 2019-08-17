@@ -33,5 +33,6 @@ ProjectiveCamera::ProjectiveCamera(const mat4 &cameraToWorld,
 
                     rasterToScreen = glm::inverse(screenToRaster);
                     rasterToCamera = glm::inverse(cameraToScreen) * rasterToScreen;
+                    //std::cout << rasterToCamera[3][3] << std::endl;
                 }
 
