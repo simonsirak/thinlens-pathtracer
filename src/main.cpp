@@ -174,7 +174,7 @@ void Draw()
 
 	mat2 screenWindow = mat2();
 	screenWindow[0][0] = -1;
-	screenWindow[0][1] = 1; // top left corner of window on image plane in screen space
+	screenWindow[0][1] = -1; // bottom left corner of window on image plane in screen space
 
 	screenWindow[1][0] = 2;
 	screenWindow[1][1] = 2; // width and height of window on image plane in screen space
@@ -188,7 +188,7 @@ void Draw()
 			CameraSample sample;
 			sample.pFilm = vec2(x + 0.5, y + 0.5);
 			sample.time = 0;
-			sample.pLens = vec2(rand() % 2, rand() % 2);
+			sample.pLens = vec2(rand() / (float)RAND_MAX, rand() / (float)RAND_MAX);
 
 			Ray r;
 

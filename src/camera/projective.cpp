@@ -17,7 +17,7 @@ ProjectiveCamera::ProjectiveCamera(const mat4 &cameraToWorld,
                 lensRadius(lensr), focalDistance(focald) {
                     // [1]
                     mat4 m1 = glm::translate(mat4(), vec3(-screenWindow[0].x, -screenWindow[0].y, 0));
-                    mat4 m2 = glm::scale(mat4(), vec3(1.f / screenWindow[1][0], -1.f / screenWindow[1][1], 1));
+                    mat4 m2 = glm::scale(mat4(), vec3(1.f / screenWindow[1][0], 1.f / screenWindow[1][1], 1));
 
                     // [2]
                     mat4 m3 = glm::scale(mat4(), vec3(film.width(), film.height(), 1));
