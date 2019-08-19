@@ -9,6 +9,7 @@ using glm::mat2;
 using glm::mat4;
 using glm::vec4;
 using glm::vec3;
+using glm::vec2;
 
 namespace {
     #define PI 3.141592653589793238462643383279502884
@@ -27,10 +28,27 @@ namespace {
         persp[3][3] = 0;
         persp[2][3] = 1;
         persp[2][2] = f / (f - n);
-        persp[3][2] =  - f * n / (f - n);
+        persp[3][2] = - f * n / (f - n);
 
         float invTanAng = 1 / std::tan(fov * (PI / 180.f) / 2.f);
         return glm::scale(mat4(), vec3(invTanAng, invTanAng, 1)) * persp;
+    }
+
+    vec2 ConcentricSampleDisk(const vec2 & u) {
+        vec2 uOffset = 2.f * u - vec2(1, 1);
+
+        if (uOffset.x == 0 && uOffset.y == 0)
+            return vec2(0, 0);
+
+        float theta, r;
+        if (std::abs(uOffset.x) > std::abs(uOffset.y)) {
+            r = uOffset.x;
+            theta = PI/4 * (uOffset.y / uOffset.x);
+        } else {
+            r = uOffset.y;
+            theta = PI/2 - PI/4 * (uOffset.x / uOffset.y);
+        }
+        return r * vec2(std::cos(theta), std::sin(theta));
     }
 };
 
@@ -61,6 +79,16 @@ float PerspectiveCamera::GenerateRay(const CameraSample& sample, Ray& ray) const
     
     ray.o = vec4(0, 0, 0, 1);
     ray.d = vec4(pCamera.x, pCamera.y, pCamera.z, 0);
+
+    if (lensRadius > 0) {
+        vec2 pLens = lensRadius * ConcentricSampleDisk(sample.pLens);
+
+        float ft = focalDistance / ray.d.z;
+        vec4 pFocus = ray.o + ray.d * ft;
+
+        ray.o = vec4(pLens.x, pLens.y, 0, 1);
+        ray.d = glm::normalize(pFocus - ray.o);
+    }
 
     // contains no projection so no need for division ray.o /= ray.o.w;
     ray.o = cameraToWorld * ray.o; 

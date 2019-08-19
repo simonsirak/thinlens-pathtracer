@@ -80,6 +80,8 @@ vec3 DirectLight( const Intersection& i );
 
 int main( int argc, char* argv[] )
 {
+	srand(time(NULL));
+
 	// load model
 	LoadTestModel(triangles);
 
@@ -177,15 +179,16 @@ void Draw()
 	screenWindow[1][0] = 2;
 	screenWindow[1][1] = 2; // width and height of window on image plane in screen space
 
-	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0, focalLength, 50, image);
+	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.01, 1, 50, image);
     for( int y=0; y<SCREEN_HEIGHT; ++y )
 	{
 		for( int x=0; x<SCREEN_WIDTH; ++x )
 		{
 
 			CameraSample sample;
-			sample.pFilm = vec2(x + 0.5f, y + 0.5f);
+			sample.pFilm = vec2(x + 0.5, y + 0.5);
 			sample.time = 0;
+			sample.pLens = vec2(rand() % 2, rand() % 2);
 
 			Ray r;
 

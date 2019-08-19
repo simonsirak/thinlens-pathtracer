@@ -22,24 +22,6 @@ ProjectiveCamera::ProjectiveCamera(const mat4 &cameraToWorld,
                     // [2]
                     mat4 m3 = glm::scale(mat4(), vec3(film.width(), film.height(), 1));
                     screenToRaster = m3 * m2 * m1;
-                        // [1] Screen -> NDC
-                        // [2] NDC -> Raster
-                        // glm::scale( // [2]
-                        //     glm::translate( // [2] ()
-                        //         glm::scale( // [1]
-                        //             glm::translate( // [1]
-                        //                 mat4(), 
-                        //                 vec3(-screenWindow[0].x, -screenWindow[0].y, 0)
-                        //             ),
-                        //             vec3(1.f / screenWindow[1][0], 1.f / screenWindow[1][1], 1)
-                        //         ),
-                        //         vec3(film.width()/2.f, film.height()/2.f, 0)
-                        //         // vec3(0, 0, 0)
-                        //      ),
-                        //     vec3(film.width(), film.height(), 1)
-                        // );
-                    
-                        //std::cout << screenToRaster[3][3] << std::endl;
 
                     rasterToScreen = glm::inverse(screenToRaster);
                     rasterToCamera = glm::inverse(screenToRaster * cameraToScreen);
