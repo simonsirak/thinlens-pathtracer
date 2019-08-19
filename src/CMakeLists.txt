@@ -19,7 +19,18 @@ add_subdirectory("camera")
 include_directories("${PROJECT_SOURCE_DIR}/includes/glm")
 include_directories("${PROJECT_SOURCE_DIR}/includes/bmp")
 include_directories("${PROJECT_SOURCE_DIR}/camera")
- 
-# add the executable
-add_executable(ThinLensPT main.cpp)
-target_link_libraries(ThinLensPT Camera)
+
+find_package (SDL)
+
+if ( NOT SDL_FOUND )
+   message ( FATAL_ERROR "SDL not found!" )
+endif ( NOT SDL_FOUND )
+
+if(SDL_FOUND)
+    include_directories(
+		${SDL_INCLUDE_DIR}
+	)
+    # add the executable
+    add_executable(ThinLensPT main.cpp)
+    target_link_libraries(ThinLensPT Camera ${SDL_LIBRARY})
+endif(SDL_FOUND) 

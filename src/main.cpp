@@ -6,6 +6,8 @@
 #include <random>
 #include <perspective.h>
 #include "TestModel.h"
+#include <SDL.h>
+#include "SDLauxiliary.h"
 
 using namespace std;
 using glm::vec3;
@@ -27,6 +29,7 @@ struct Intersection{
 const int SCREEN_WIDTH = 300;
 const int SCREEN_HEIGHT = 300;
 bitmap_image image(SCREEN_WIDTH, SCREEN_HEIGHT);
+SDL_Surface* screen;
 
 /* Time */
 int t;
@@ -40,8 +43,9 @@ float pitch = 0;
 #define PITCH(x, dt) (pitch += (SCREEN_WIDTH / 2.0f - x) * PI * 0.001f * dt / (SCREEN_WIDTH))
 #define YAW(y, dt) (yaw += (y - SCREEN_HEIGHT / 2.0f) * PI * 0.001f * dt / (SCREEN_HEIGHT))
 
-vec3 cameraPos( 0, 0, 0 );
+vec3 cameraPos( 0, 0, -3 );
 
+mat4 rotation;
 mat3 R; // Y * P
 mat3 Y; // Yaw rotation matrix (around y axis)
 mat3 P; // Pitch rotation matrix (around x axis)
@@ -79,16 +83,92 @@ int main( int argc, char* argv[] )
 	// load model
 	LoadTestModel(triangles);
 
-    Draw();
+	screen = InitializeSDL( SCREEN_WIDTH, SCREEN_HEIGHT );
+	t = SDL_GetTicks();	// Set start value for timer.
+
+	while( NoQuitMessageSDL() )
+	{
+		Update();
+		Draw();
+	}
 
 	image.save_image("output.bmp" );
 	return 0;
 }
 
+void Update()
+{
+	// Compute frame time:
+	int t2 = SDL_GetTicks();
+	float dt = float(t2-t);
+	t = t2;
+	cout << "Render time: " << dt << " ms." << endl;
+
+	int x, y;
+	if(SDL_GetMouseState(&x, &y) & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+		YAW(x, dt);
+		PITCH(y, dt);
+	}
+
+	Uint8* keystate = SDL_GetKeyState( 0 );
+
+	if( keystate[SDLK_UP] )
+		lightPos += FORWARD(R) * 0.007f * dt;
+
+	if( keystate[SDLK_DOWN] )
+		lightPos -= FORWARD(R) * 0.007f * dt;
+
+	if( keystate[SDLK_RIGHT] )
+		lightPos += RIGHT(R) * 0.007f * dt;
+
+	if( keystate[SDLK_LEFT] )
+		lightPos -= RIGHT(R) * 0.007f * dt;
+
+	if(keystate[SDLK_w]){
+		cameraPos += FORWARD(R) * 0.007f * dt; // camera Z
+	} 
+	
+	if(keystate[SDLK_s]){
+		cameraPos -= FORWARD(R) * 0.007f * dt; // camera Z
+	} 
+	
+	if(keystate[SDLK_a]){
+		cameraPos -= RIGHT(R) * 0.007f * dt; // camera X
+	} 
+	
+	if(keystate[SDLK_d]){
+		cameraPos += RIGHT(R) * 0.007f * dt; // camera X
+	} 
+	
+	if(keystate[SDLK_q]){
+		cameraPos -= UP(R) * 0.007f * dt; // camera Y
+	} 
+
+	if(keystate[SDLK_e]){
+		cameraPos += UP(R) * 0.007f * dt; // camera Y
+	} 
+
+	Y[0][0] = cos(yaw);
+	Y[0][2] = -sin(yaw);
+	Y[2][0] = sin(yaw);
+	Y[2][2] = cos(yaw);
+
+	P[1][1] = cos(pitch);
+	P[1][2] = sin(pitch);
+	P[2][1] = -sin(pitch);
+	P[2][2] = cos(pitch);
+
+	R = Y * P;
+	rotation = mat4(R);
+}
+
 void Draw()
 {
-	mat4 cameraToWorld;
-	cameraToWorld = glm::translate(cameraToWorld, cameraPos); // translation is put into last column -- only projections are in last row
+	if( SDL_MUSTLOCK(screen) )
+		SDL_LockSurface(screen);
+
+	mat4 cameraToWorld = rotation;
+	cameraToWorld[3] = vec4(cameraPos, 1);
 
 	mat2 screenWindow = mat2();
 	screenWindow[0][0] = -1;
@@ -97,11 +177,12 @@ void Draw()
 	screenWindow[1][0] = 2;
 	screenWindow[1][1] = 2; // width and height of window on image plane in screen space
 
-	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0, focalLength, 90, image);
+	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0, focalLength, 50, image);
     for( int y=0; y<SCREEN_HEIGHT; ++y )
 	{
 		for( int x=0; x<SCREEN_WIDTH; ++x )
 		{
+
 			CameraSample sample;
 			sample.pFilm = vec2(x + 0.5f, y + 0.5f);
 			sample.time = 0;
@@ -120,13 +201,20 @@ void Draw()
                 // the two paths using multiple importance sampling 
                 // with the balance heuristic.
 
-                vec3 color = glm::clamp(255.f * DirectLight(inter) + triangles[inter.triangleIndex].color * indirectLight, 0.f, 255.f);
+                vec3 color = glm::clamp(glm::clamp(255.f * DirectLight(inter), 0, 255.f) + 255.f * triangles[inter.triangleIndex].color * indirectLight, 0, 255);
                 image.set_pixel(x, y, color.r, color.g, color.b);
+				PutPixelSDL(screen, x, y, DirectLight(inter) + triangles[inter.triangleIndex].color * indirectLight);
 			} else {
                 image.set_pixel(x, y, color.r, color.g, color.b);
+				PutPixelSDL(screen, x, y, vec3(0, 0, 0));
 			}
 		}
 	}
+
+	if( SDL_MUSTLOCK(screen) )
+		SDL_UnlockSurface(screen);
+
+	SDL_UpdateRect( screen, 0, 0, 0, 0 );
 }
 
 bool ClosestIntersection(

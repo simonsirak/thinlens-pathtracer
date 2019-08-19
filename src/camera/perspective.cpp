@@ -12,15 +12,25 @@ using glm::vec3;
 
 namespace {
     #define PI 3.141592653589793238462643383279502884
+    /*
+        The Field of View specifies how much of the 
+        image plane that will be visible on screen. 
+        Any points that, after the perspective transform,
+        are mapped within [-1, 1] in all axes are 
+        considered visible.
+
+        We will only use this to get points that are on the
+        image plane, i.e near plane.
+    */
     mat4 Perspective(float fov, float n, float f) {
         mat4 persp;
         persp[3][3] = 0;
         persp[2][3] = 1;
         persp[2][2] = f / (f - n);
-        persp[3][2] = -f * n / (f - n);
+        persp[3][2] =  - f * n / (f - n);
 
         float invTanAng = 1 / std::tan(fov * (PI / 180.f) / 2.f);
-        return glm::scale(persp, vec3(invTanAng, invTanAng, 1));
+        return glm::scale(mat4(), vec3(invTanAng, invTanAng, 1)) * persp;
     }
 };
 
