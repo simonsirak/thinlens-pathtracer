@@ -26,8 +26,10 @@ public:
     // not necessary to declare in ProjectiveCamera, inheritance will still work;
     // should probably do it for clarity though
     float GenerateRay(const CameraSample& sample, Ray& ray) const override;
+    void Pdf_We(const Ray &ray, float *pdfPos, float *pdfDir) const override;
 protected:
     vec4 dxCamera, dyCamera;
+    float A;
 };
 
 #endif

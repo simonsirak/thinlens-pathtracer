@@ -6,6 +6,7 @@
 #include <random>
 #include <perspective.h>
 #include "TestModel.h"
+#include "utility.h"
 #include <SDL.h>
 #include "SDLauxiliary.h"
 
@@ -15,21 +16,27 @@ using glm::mat3;
 
 #define PI 3.141592653589793238462643383279502884
 
-// STRUCTS 
-struct Intersection{
-	vec3 position;
-	float distance;
-	int triangleIndex;
-};
-
 // ----------------------------------------------------------------------------
 // GLOBAL VARIABLES
 
 /* Screen variables */
-const int SCREEN_WIDTH = 300;
-const int SCREEN_HEIGHT = 300;
+const int SCREEN_WIDTH = 150;
+const int SCREEN_HEIGHT = 150;
 bitmap_image image(SCREEN_WIDTH, SCREEN_HEIGHT);
 SDL_Surface* screen;
+
+/*
+	Meshes to be rendered are added to
+	triangles. Lights to be used are
+	added to triangles and lights.
+*/
+vector<Obj*> triangles;
+vector<Obj*> lights;
+
+/* BDPT parameters */
+vec3 buffer[SCREEN_WIDTH][SCREEN_HEIGHT];
+int numSamples = 200;
+int maxDepth = 10;
 
 /* Time */
 int t;
@@ -56,9 +63,6 @@ mat3 P; // Pitch rotation matrix (around x axis)
 #define RIGHT(R) (R[0])
 #define UP(R) (R[1])
 
-/* Model */
-vector<Triangle> triangles;
-
 /* Light source */
 vec3 lightPos( 0, -0.5, -0.7 );
 vec3 lightColor = 14.f * vec3( 1, 1, 1 );
@@ -70,29 +74,33 @@ vec3 indirectLight = 0.5f*vec3( 1, 1, 1 );
 void Update();
 void Draw();
 bool ClosestIntersection(
-	vec3 start, 
-	vec3 dir,
-	const vector<Triangle>& triangles, 
+	vec4 start, 
+	vec4 dir,
+	const vector<Obj*>& triangles, 
 	Intersection& closestIntersection 
 );
-
-vec3 DirectLight( const Intersection& i );
+int GenerateEyePath(int x, int y, vector<Vertex>& eyePath, int maxDepth, Camera* camera);
+int GenerateLightPath(vector<Vertex>& lightPath, int maxDepth);
+int TracePath(Ray r, vector<Vertex>& subPath, int maxDepth, bool isCameraPath, vec3 beta, float pdf);
+vec3 connect(vector<Vertex>& lightPath, vector<Vertex>& eyePath);
 
 int main( int argc, char* argv[] )
 {
 	srand(time(NULL));
 
 	// load model
-	LoadTestModel(triangles);
+	LoadTestModel(triangles, lights);
 
 	screen = InitializeSDL( SCREEN_WIDTH, SCREEN_HEIGHT );
 	t = SDL_GetTicks();	// Set start value for timer.
 
-	while( NoQuitMessageSDL() )
-	{
-		Update();
-		Draw();
-	}
+	// while( NoQuitMessageSDL() )
+	// {
+	// 	Update();
+	// 	Draw();
+	// }
+
+	Draw();
 
 	image.save_image("output.bmp" );
 	return 0;
@@ -166,9 +174,6 @@ void Update()
 
 void Draw()
 {
-	if( SDL_MUSTLOCK(screen) )
-		SDL_LockSurface(screen);
-
 	mat4 cameraToWorld = rotation;
 	cameraToWorld[3] = vec4(cameraPos, 1);
 
@@ -179,130 +184,337 @@ void Draw()
 	screenWindow[1][0] = 2;
 	screenWindow[1][1] = 2; // width and height of window on image plane in screen space
 
-	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.01, 1, 50, image);
-    for( int y=0; y<SCREEN_HEIGHT; ++y )
-	{
-		for( int x=0; x<SCREEN_WIDTH; ++x )
-		{
+	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.3, 2.3, 50, image);
 
-			CameraSample sample;
-			sample.pFilm = vec2(x + 0.5, y + 0.5);
-			sample.time = 0;
-			sample.pLens = vec2(rand() / (float)RAND_MAX, rand() / (float)RAND_MAX);
+	for(int i = 0 ; i < numSamples; ++i){
+        if( SDL_MUSTLOCK(screen) )
+            SDL_LockSurface(screen);
 
-			Ray r;
+        cout << "Sample " << (i+1) << "/" << numSamples << endl; 
 
-			c->GenerateRay(sample, r);
+        for( int y=0; y<SCREEN_HEIGHT; ++y ){
+            for( int x=0; x<SCREEN_WIDTH; ++x ){
+                if(!NoQuitMessageSDL()){
+					if( SDL_MUSTLOCK(screen) )
+        				SDL_UnlockSurface(screen);
+					return;
+				}
 
-			// cout << "vec4(" << r.d.x << "," << r.d.y << "," << r.d.z << "," << r.d.w << ")" << endl;
+                vector<Vertex> lightPath;
+                vector<Vertex> eyePath;
 
-			vec3 color( 0, 0, 0 );
-			Intersection inter;
-			if(ClosestIntersection(vec3(r.o.x, r.o.y, r.o.z), vec3(r.d.x, r.d.y, r.d.z), triangles, inter)){
+                // Generate eye path
+                GenerateEyePath(x, y, eyePath, maxDepth, c);
+
+                // Generate light path
+                GenerateLightPath(lightPath, maxDepth);
+
+                vec3 old = buffer[x][y];
+
                 // This is the sequential form of division by numSamples.
                 // connect() calculates a multi-sample estimator from 
                 // the two paths using multiple importance sampling 
                 // with the balance heuristic.
+                buffer[x][y] = (old * float(i) + connect(lightPath, eyePath))/float(i+1);
 
-                vec3 color = glm::clamp(glm::clamp(255.f * DirectLight(inter), 0, 255.f) + 255.f * triangles[inter.triangleIndex].color * indirectLight, 0, 255);
-                image.set_pixel(x, y, color.r, color.g, color.b);
-				PutPixelSDL(screen, x, y, DirectLight(inter) + triangles[inter.triangleIndex].color * indirectLight);
-			} else {
-                image.set_pixel(x, y, color.r, color.g, color.b);
-				PutPixelSDL(screen, x, y, vec3(0, 0, 0));
-			}
-		}
-	}
+                PutPixelSDL( screen, x, y,  buffer[x][y]);
+				vec3 color = glm::clamp(255.f * buffer[x][y], 0.f, 255.f);
+				image.set_pixel(x, y, color.r, color.g, color.b);
+            }
+        }   
 
-	if( SDL_MUSTLOCK(screen) )
-		SDL_UnlockSurface(screen);
+        if( SDL_MUSTLOCK(screen) )
+        	SDL_UnlockSurface(screen);
 
-	SDL_UpdateRect( screen, 0, 0, 0, 0 );
+        SDL_UpdateRect( screen, 0, 0, 0, 0 );
+    }
 }
 
 bool ClosestIntersection(
-	vec3 start, 
-	vec3 dir,
-	const vector<Triangle>& triangles, 
+	vec4 start, 
+	vec4 dir,
+	const vector<Obj*>& triangles, 
 	Intersection& closestIntersection 
 ){
-	closestIntersection.distance = std::numeric_limits<float>::max();
-	dir = glm::normalize(dir); // does not matter what you do here, the t aka x.x will adjust the length. No need to normalize
+    closestIntersection.t = std::numeric_limits<float>::max();
+    dir = glm::normalize(dir); // does not matter what you do here, the t aka x.x will adjust the length. No need to normalize
+    Ray r = {start, dir, 0};
 
-	for(int i = 0; i < triangles.size(); ++i){
-		const Triangle & triangle = triangles[i];
-		using glm::vec3;
-		using glm::mat3;
-		vec3 v0 = triangle.v0;
-		vec3 v1 = triangle.v1; 
-		vec3 v2 = triangle.v2;
-		vec3 e1 = v1 - v0;
-		vec3 e2 = v2 - v0;
-		vec3 b = start - v0;
-		mat3 A( -dir, e1, e2 );
-		vec3 x = glm::inverse( A ) * b;
+    int originalTriangle = closestIntersection.triangleIndex;
 
-		if(x.x > 0 && x.y >= 0 && x.z >= 0 && x.y <= 1 && x.z <= 1 && x.y + x.z <= 1){
+    for(int i = 0; i < triangles.size(); ++i){
+        if(i == originalTriangle)
+            continue;
 
-			vec3 end = start + x.x * dir;
-			float distance = glm::length(x.x * dir);
-			if(distance < closestIntersection.distance){
-				closestIntersection = {end, distance, i}; // element-wise copy assignment
-			}
-		}
-	}
+        const Obj* triangle = triangles[i];
+        double t = triangle->intersect(r);
 
-	if(closestIntersection.distance == std::numeric_limits<float>::max()){
-		return false;
-	} else {
-		return true;
-	}
+        if(t > 0 && t < closestIntersection.t){ // 0.0001f is small epsilon to prevent self intersection
+            closestIntersection.t = t;
+            closestIntersection.triangleIndex = i;
+        }
+    }
+
+    if(closestIntersection.t == std::numeric_limits<float>::max()){
+        return false;
+    } else {
+        closestIntersection.position = r.o + r.d * closestIntersection.t;
+        closestIntersection.normal = vec4(triangles[closestIntersection.triangleIndex]->normal(vec3(closestIntersection.position.x,closestIntersection.position.y,closestIntersection.position.z)), 0);
+        return true;
+    }
 }
 
-vec3 DirectLight( const Intersection& i ){
+int GenerateEyePath(int x, int y, vector<Vertex>& eyePath, int maxDepth, Camera* camera){
+
+    if(maxDepth == 0)
+        return 0;
+
+    vec3 normal(0, 0, 1);
+
+	CameraSample sample;
+	sample.pFilm = vec2(x + rand() / (float)RAND_MAX, y + rand() / (float)RAND_MAX);
+	sample.time = 0;
+	sample.pLens = vec2(rand() / (float)RAND_MAX, rand() / (float)RAND_MAX);
+
+	RayDifferential r;
 	
-	// get radius from sphere defined by light position 
-	// and the point of intersection.
-	vec3 radius = (lightPos - i.position);
-	float r2 = glm::length(radius)*glm::length(radius); // r^2
-	radius = glm::normalize(radius); // normalize for future calculations
+	vec3 beta = vec3(camera->GenerateRayDifferential(sample, r));
+	float pdfPos, pdfDir;
+	camera->Pdf_We(r, &pdfPos, &pdfDir);
 
-	vec3 light = lightColor/float(4.0f*PI*r2); // calculate irradiance of light
+    normal = glm::normalize(normal);
+    r.d = glm::normalize(r.d);
 
-	/* 
-		calculate normal in direction based on source of ray
-		for the "first ray", it is the camera position that 
-		is the source. However, for multiple bounces you would 
-		need to embed the ray source into the Intersection 
-		struct so that the correct normal can be calculated
-		even when the camera is not the source.
+    eyePath.push_back({1, 0, beta, -1, vec4(normal, 0), vec4(cameraPos, 1), r.d}); // the probability up to this point is 1
 
-		This makes the model only take the viewable surface into
-		consideration. Note however that for any given ray source, only 
-		one side of the surface is ever viewable , so this all works 
-		out in the end. Multiple bounces would have different sources,
-		so it is still possible that the other side of a surface can 
-		receive light rays. Just not from light hitting the other side 
-		of the surface.
-	*/
+    return TracePath({r.o, r.d, 0}, eyePath, maxDepth - 1, true, beta, pdfDir) + 1;
+}
 
-	vec3 sourceToLight = cameraPos - i.position;
-	vec3 normal = glm::dot(sourceToLight, triangles[i.triangleIndex].normal) * triangles[i.triangleIndex].normal / glm::dot(triangles[i.triangleIndex].normal, triangles[i.triangleIndex].normal);
-	normal = glm::normalize(normal);
+int GenerateLightPath(vector<Vertex>& lightPath, int maxDepth){
 
-	/*
-		Direction needs to either always or never be normalised. 
-		Because it is not normalised in the draw function, I 
-		will not normalize here.
+    if(maxDepth == 0)
+        return 0;
 
-		Also, I use a shadow bias (tiny offset in normal direction)
-		to avoid "shadow acne" which is caused by self-intersection.
-	*/
+    // choose random light and find its index int triangles[],
+    // the vector containing all shapes (yes I know it's a dumb
+    // name since we have spheres now...)
+    int index = rand() % lights.size();
+    int triangleIndex = -1;
 
-	Intersection blocker;
-	if(ClosestIntersection(i.position + normal * 0.0001f, (lightPos - i.position), triangles, blocker) && glm::length(blocker.position - i.position) <= glm::length(lightPos-i.position)){
-		return vec3(0, 0, 0);
-	} else {
-		return triangles[i.triangleIndex].color * light * (glm::dot(radius, normal) > 0.0f ? glm::dot(radius, normal) : 0.0f);
-	}
+    Sphere * light = dynamic_cast<Sphere*>(lights[index]);   
+
+    for(int i = 0; i < triangles.size(); ++i){
+        if(light == triangles[i]){
+            triangleIndex = i;
+            break;
+        }
+    } 
+
+    vec4 offset = uniformSphereSample(light->r);
+    vec4 dir = uniformHemisphereSample(offset, 1);
+
+    float lightChoiceProb = 1 / float(lights.size());
+    float lightPosProb = uniformSphereSamplePDF(light->r);
+    float lightDirProb = uniformHemisphereSamplePDF(1);
+    float pointProb = lightChoiceProb * lightPosProb * lightDirProb;
+
+    vec3 Le = vec3(light->emission, light->emission, light->emission);
+    lightPath.push_back({lightChoiceProb * lightPosProb, 0, Le, triangleIndex, offset, vec4(light->c, 1) + offset, dir}); 
+
+    /*			
+        The light endpoint base case of the measurement 
+        contribution function.
+
+        Formally according to the measurement contribution 
+        function, this calculation should be:
+
+        = Le * G(current, next) / (lightChoiceProb * lightPosProb * lightDirProb * DirectionToAreaConversion(current, next))
+
+        However certain factors in G and DirectionToAreaConversion
+        require knowledge about the next point which we do not have.
+        Luckily, these factors cancel out, and we only have to worry
+        about the factor remaining in the calculation below.
+    */
+
+    vec3 beta = Le * glm::dot(glm::normalize(offset), dir) / pointProb;
+
+    return TracePath({vec4(light->c, 1) + offset, dir, 0}, lightPath, maxDepth - 1, false, beta, uniformHemisphereSamplePDF(1)) + 1;
+}
+
+/*
+    Generates a path from a certain starting 
+    vertex (camera or light source) specified
+    in the subPath[0]. The path generates at 
+    most maxDepth additional vertices.
+
+    The path starts off using the Ray r. The 
+    base case sample contribution (from either) is passed 
+    through from the beta vector.
+*/
+int TracePath(Ray r, vector<Vertex>& subPath, int maxDepth, bool isCameraPath, vec3 beta, float pdf) {
+
+    if (maxDepth == 0) {
+        return 0;  
+    }
+
+    int bounces = 0;
+    float pdfFwd = pdf;
+    float pdfRev = 0;
+
+    while(true){
+        Intersection point;
+        point.triangleIndex = subPath[bounces].surfaceIndex; // avoid self intersection
+
+        if (!ClosestIntersection(r.o, r.d, triangles, point)) { // Nothing was hit.
+            break; 
+        }
+
+        if(++bounces >= maxDepth)
+            break;
+
+        Vertex vertex;
+        Vertex *prev = &subPath[bounces-1];
+
+        /* Process intersection data */
+        Ray r1;
+
+        r1.o = point.position;
+        vec4 intersectionToOrigin = glm::normalize(r.o - r1.o);
+        vec3 gnormal = glm::normalize(triangles[point.triangleIndex]->normal(vec3(r1.o.x, r1.o.y, r1.o.z)));
+        vec4 snormal = glm::normalize(projectAOntoB(intersectionToOrigin, vec4(gnormal, 0))); // HAS to be normalized after projection onto another vector.
+        r1.d = uniformHemisphereSample(snormal, 1); // regardless of which path, sample uniformly
+
+        /* Construct vertex */
+        vertex.position = point.position;
+        vertex.normal = snormal;
+        vertex.surfaceIndex = point.triangleIndex;
+
+        // convert to area based density for by applying solidangle-to-area conversion
+        vertex.pdfFwd = pdfFwd * DirectionToAreaConversion(*prev, vertex);
+
+        // give currently constructed sample contribution to the 
+        // current vertex
+        vertex.c = beta;
+
+        // add vertex to path
+        subPath.push_back(vertex);
+
+        // Refetch previous node in case of vector resizing
+        prev = &subPath[bounces-1];
+
+        // terminate if a light source was reached
+        if(triangles[point.triangleIndex]->emission > 0){
+            break;
+        }
+
+        // pdfFwd: Probability of sampling the next direction from current.
+        // pdfRev: Probability of current sampling a direction towards previous. 
+        // so pdfRev is calculated in reversed direction compared to direction of path generation.
+
+        // Regardless of path, sample uniformly
+        pdfFwd = uniformHemisphereSamplePDF(1);
+        pdfRev = uniformHemisphereSamplePDF(1);
+
+        prev->pdfRev = pdfRev * DirectionToAreaConversion(vertex, *prev);
+
+        // append the contribution from the current intersection point 
+        // onto the total sample contribution "beta"
+
+        vec3 brdf = BRDF(vertex, r1.d, r.d, triangles, isCameraPath); 
+
+        /*
+            One of the many nested surface integral samples.
+
+            Formally according to the measurement contribution 
+            function, this calculation should be:
+
+            *= (brdf * G(current, next) / (pdfFwd * DirectionToAreaConversion(current, next)))
+
+            However certain factors in G and DirectionToAreaConversion
+            require knowledge about the next point which we do not have.
+            Luckily, these factors cancel out, and we only have to worry
+            about the factor remaining in the calculation below.
+        */
+
+        // Using the old direction (r.d) is incorrect and 
+        // will produce artefacts.
+        beta *= (brdf * glm::abs(glm::dot(r1.d, snormal) / pdfFwd));
+
+        // Don't forget to update the ray for the next iteration!
+        r = r1;
+    }
+
+    return bounces;
+}
+
+/*
+    Calculate multi-sample estimator using MIS. The light and 
+    eye path are connected in different ways to form the many
+    path sampling strategies specified in the report. The 
+    contributions from these are then weighted with the balance 
+    heuristic and added together, forming the multi-sample 
+    estimator.
+*/
+vec3 connect(vector<Vertex>& lightPath, vector<Vertex>& eyePath){
+    int t = lightPath.size();
+    int s = eyePath.size();
+
+    float basicScale = 1; //1 / (s + t + 2.);
+    vec3 F;
+
+    // t == 0, s >= 2:
+    for(int i = 2; i <= s; ++i){
+        Vertex &last = eyePath[i-1];
+        if(triangles[last.surfaceIndex]->emission > 0){
+            vec3 Le = vec3(triangles[last.surfaceIndex]->emission, triangles[last.surfaceIndex]->emission, triangles[last.surfaceIndex]->emission);
+            F += Le * last.c * MIS(lightPath, eyePath, 0, i);
+        }
+    }
+
+    // t >= 1, s >= 2:
+    for(int i = 1; i <= t; ++i){
+        for(int j = 2; j <= s; ++j){
+
+            // perform visibility test that is related to the geometry 
+            // term G. Only calculate contribution from this path 
+            // sampling strategy if connection is possible.
+            Intersection otherObj;
+            otherObj.triangleIndex = lightPath[i-1].surfaceIndex; // previous vertex
+            if(!ClosestIntersection(lightPath[i-1].position, (eyePath[j-1].position - lightPath[i-1].position), triangles, otherObj)){
+                continue;
+            } else {
+                if(otherObj.triangleIndex != eyePath[j-1].surfaceIndex && otherObj.t > 0.01f){
+                    continue;
+                } else {
+                
+                /*
+                    special case of light BRDF is to avoid 
+                    index out of bounds. It essentially 
+                    simulates "not using the light BRDF" if 
+                    we are connecting directly to the light 
+                    source. 
+
+                    This is correct behavior, since there is 
+                    no real meaning to the BRDF at the light 
+                    source (There is no "incoming direction")
+                */
+
+                F += lightPath[i-1].c * eyePath[j-1].c 
+                        * (i > 1 ? BRDF(lightPath[i-1], (lightPath[i-2].position - lightPath[i-1].position), (eyePath[j-1].position - lightPath[i-1].position), triangles, true) : vec3(1,1,1))
+                        * G(lightPath[i-1], eyePath[j-1])
+                        * BRDF(eyePath[j-1], (lightPath[i-1].position - eyePath[j-1].position), (eyePath[j-2].position - eyePath[j-1].position), triangles, true)
+                        * triangles[eyePath[j-1].surfaceIndex]->color / float(PI)
+                        * MIS(lightPath, eyePath, i, j);
+                }
+            } 
+        }
+    }
+
+    // F is now the result of the multi-sample estimation, aka 
+    // is a multi-sample estimator F. This is because we have taken 
+    // a sample of a number of strategies defined by their pdf:s 
+    // p(s,t). Note that the pdf division was baked into the 
+    // calculation of the pre-computed sample contribution.
+
+    return F; 
 }

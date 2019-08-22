@@ -11,8 +11,9 @@ using glm::vec4;
 using glm::vec3;
 using glm::vec2;
 
+#define PI 3.141592653589793238462643383279502884
+
 namespace {
-    #define PI 3.141592653589793238462643383279502884
     /*
         The Field of View specifies how much of the 
         image plane that will be visible on screen. 
@@ -68,6 +69,13 @@ PerspectiveCamera::PerspectiveCamera(
     vec4 y1 = rasterToCamera * vec4(0,0,0,1); y1 /= y1.w;
     dxCamera = x2 - x1; dxCamera.w = 0;
     dyCamera = y2 - y1; dyCamera.w = 0;
+
+    vec2 res(film.width(), film.height());
+    vec4 pMin = rasterToCamera * vec4(0, 0, 0, 1);
+    vec4 pMax = rasterToCamera * vec4(res.x, res.y, 0, 1);
+    pMin /= pMin.z;
+    pMax /= pMax.z;
+    A = std::abs((pMax.x - pMin.x) * (pMax.y - pMin.y));
 }
 
 float PerspectiveCamera::GenerateRay(const CameraSample& sample, Ray& ray) const {
@@ -111,3 +119,24 @@ float PerspectiveCamera::GenerateRay(const CameraSample& sample, Ray& ray) const
     return 1;
 }
 
+void PerspectiveCamera::Pdf_We(const Ray &ray, float *pdfPos, float *pdfDir) const {
+    float cosTheta = glm::dot(ray.d, cameraToWorld * vec4(0, 0, 1, 0));
+    if (cosTheta <= 0) {
+        *pdfPos = *pdfDir = 0;
+        return;
+    }
+
+    vec4 pFocus = ray.o + ray.d * (lensRadius > 0 ? focalDistance : 1) / cosTheta;
+    vec4 pRaster = glm::inverse(rasterToCamera) * glm::inverse(cameraToWorld) * pFocus;
+
+    if (pRaster.x < 0 || pRaster.x >= film.width() ||
+        pRaster.y < 0 || pRaster.y >= film.height()) {
+        *pdfPos = *pdfDir = 0;
+        return;
+    }
+
+    float lensArea = lensRadius != 0 ? (PI * lensRadius * lensRadius) : 1;
+
+    *pdfPos = 1 / lensArea;
+    *pdfDir = 1 / (A * cosTheta * cosTheta * cosTheta);
+}

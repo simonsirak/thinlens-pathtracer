@@ -56,6 +56,8 @@ public:
     /* TODO */
     virtual float GenerateRayDifferential(const CameraSample& sample, RayDifferential& rd);
 
+    virtual void Pdf_We(const Ray &ray, float *pdfPos, float *pdfDir) const = 0;
+
     virtual ~Camera();
 };
 

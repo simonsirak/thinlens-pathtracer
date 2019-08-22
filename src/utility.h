@@ -15,8 +15,8 @@
     about each vertex in a subpath.
 */
 struct Intersection{
-    vec3 position;
-    vec3 normal;
+    vec4 position;
+    vec4 normal;
     float t;
     int triangleIndex;
 };
@@ -27,9 +27,9 @@ struct Vertex {
     vec3 c; // contribution from a path that crosses to the other sub-path from this vertex
     int surfaceIndex; // triangles[]-index of surface collided with
 
-    vec3 normal; // correctly oriented normal of surface collided with
-    vec3 position;
-    vec3 dir; // outgoing direction
+    vec4 normal; // correctly oriented normal of surface collided with
+    vec4 position;
+    vec4 dir; // outgoing direction
 };
 
 std::random_device rd;  //Will be used to obtain a seed for the random number engine
@@ -42,22 +42,23 @@ using glm::mat3;
     Calculates and returns the orthogonal 
     projection of vector a onto vector b.
 */
-vec3 projectAOntoB(const vec3 & a, const vec3 & b){
-    vec3 c = glm::dot(a, b) * b / glm::dot(b, b);
+template<typename T>
+T projectAOntoB(const T & a, const T & b){
+    T c = glm::dot(a, b) * b / glm::dot(b, b);
     return c;
 }
 
 /*
     Returns a uniform sphere sample.
 */
-vec3 uniformSphereSample(float r){
+vec4 uniformSphereSample(float r){
 
     std::uniform_real_distribution<float> dis(0, 1.0);
 
     float theta0 = 2*PI*dis(rd);
     float theta1 = acos(1 - 2*dis(rd));
 
-    vec3 dir = vec3(sin(theta1)*sin(theta0), sin(theta1)*cos(theta0), cos(theta1)); 
+    vec4 dir = vec4(sin(theta1)*sin(theta0), sin(theta1)*cos(theta0), cos(theta1), 0); 
 
     dir = r * glm::normalize(dir);
 
@@ -74,14 +75,14 @@ float uniformSphereSamplePDF(float r){
 /*
     Sample hemisphere uniformly around an axis.
 */
-vec3 uniformHemisphereSample(const vec3 & axis, float r){
+vec4 uniformHemisphereSample(const vec4 & axis, float r){
 
     std::uniform_real_distribution<float> dis(0, 1.0);
 
     float theta0 = 2*PI*dis(rd);
     float theta1 = acos(1 - 2*dis(rd));
 
-    vec3 dir = vec3(sin(theta1)*sin(theta0), sin(theta1)*cos(theta0), cos(theta1)); 
+    vec4 dir = vec4(sin(theta1)*sin(theta0), sin(theta1)*cos(theta0), cos(theta1), 0); 
 
     dir = glm::normalize(projectAOntoB(axis, dir));
 
@@ -99,13 +100,13 @@ float uniformHemisphereSamplePDF(float r){
     Calculates the BRDF. Currently only supports 
     lambertian reflection (shape type == 1).
 */
-vec3 BRDF(Vertex &vert, vec3 wo, vec3 wi, vector<Obj*> &shapes, bool keepDirections){
+vec3 BRDF(Vertex &vert, vec4 wo, vec4 wi, vector<Obj*> &shapes, bool keepDirections){
     if(!keepDirections){ // if we are on light path
         // Path is generated in other direction, so 
         // flip incident and outgoing for correct 
         // BRDF (only matters for non-diffuse 
         // reflection).
-        vec3 tmp = wo;
+        vec4 tmp = wo;
         wo = wi;
         wi = tmp;
     }
@@ -128,7 +129,7 @@ vec3 BRDF(Vertex &vert, vec3 wo, vec3 wi, vector<Obj*> &shapes, bool keepDirecti
     know whether there is visibility.
 */
 float G(const Vertex& a, const Vertex& b){
-    vec3 ab = b.position - a.position;
+    vec4 ab = b.position - a.position;
     float cosTheta = glm::dot(glm::normalize(a.normal), glm::normalize(ab)); // angle between outgoing and normal at a
     float cosThetaPrime = glm::dot(glm::normalize(b.normal), glm::normalize(-ab)); // angle between ingoing and normal at b
     return abs(cosTheta*cosThetaPrime) / glm::dot(ab, ab);
@@ -144,7 +145,7 @@ float G(const Vertex& a, const Vertex& b){
     Input: Two vertices on a subpath.
 */
 float DirectionToAreaConversion(const Vertex& a, const Vertex& b){
-    vec3 w = b.position - a.position;
+    vec4 w = b.position - a.position;
     float invDist2 = 1 / glm::dot(w, w);
     return invDist2 * glm::abs(glm::dot(b.normal, glm::normalize(w)));
 }
