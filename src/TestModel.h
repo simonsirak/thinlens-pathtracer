@@ -79,12 +79,8 @@ void LoadTestModel( std::vector<Triangle>& triangles )
 	triangles.push_back( Triangle( H, F, D, yellow ) );
 
 	// Ceiling
-	triangles.push_back( Triangle( E, F, G, cyan,1.4f*vec3(1,1,1)) );
-	triangles.push_back( Triangle( F, H, G, cyan,1.4f*vec3(1,1,1)) );
-
-	// Back wall
-	triangles.push_back( Triangle( G, D, C, white ) );
-	triangles.push_back( Triangle( G, H, D, white ) );
+	triangles.push_back( Triangle( E, F, G, cyan ) );
+	triangles.push_back( Triangle( F, H, G, cyan ) );
 
 	// ---------------------------------------------------------------------------
 	// Short block
@@ -176,6 +172,13 @@ void LoadTestModel( std::vector<Triangle>& triangles )
 
 		triangles[i].ComputeNormal();
 	}
+
+	// vec3 a(-1,-1,-4);
+	// vec3 b(-1,1,-4);
+	// vec3 c(1,1,-4);
+	// vec3 d(1,-1,-4);
+	// triangles.push_back(Triangle(a,b,c,glm::vec3(0,0,0),3.4f*glm::vec3(1,1,1)));
+	// triangles.push_back(Triangle(a,c,d,glm::vec3(0,0,0),3.4f*glm::vec3(1,1,1)));
 }
 
 #endif

@@ -177,7 +177,7 @@ void Draw()
 	screenWindow[1][0] = 2;
 	screenWindow[1][1] = 2; // width and height of window on image plane in screen space
 
-	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.001, 3.2, 50, image);
+	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.2, 2.3, 50, image);
 
 	for(int i = 0; i < numSamples; ++i){
 		
@@ -266,7 +266,7 @@ vec3 TracePath(Ray &r, int depth) {
 
 	Intersection i;
 	if (!ClosestIntersection(vec3(r.o.x,r.o.y,r.o.z),vec3(r.d.x,r.d.y,r.d.z),triangles,i)) {
-		return vec3(0,0,0);  // Nothing was hit.
+		return 0.7f*vec3(1,1,1);  // Nothing was hit; everything around you emits white light, e.g while outside
 	}
 
 	Triangle& triangle = triangles[i.triangleIndex];
