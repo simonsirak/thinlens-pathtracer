@@ -2,7 +2,7 @@
 #define PROJECTIVE_CAMERA_H
 
 #include <camera.h>
-#include <bmp.h>
+#include <bmp/bmp.h>
 #include <glm/glm.hpp>
 
 using glm::mat2;
