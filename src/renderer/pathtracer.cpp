@@ -1,14 +1,16 @@
-#include <bmp.h>
+#include <cmath>
+#include <random>
+#include <sstream>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/string_cast.hpp>
-#include <cmath>
-#include <random>
+
+#include <bmp/bmp.h>
+#include <auxiliaries/TestModel.h>
+#include <auxiliaries/utility.h>
+
 #include <perspective.h>
-#include "TestModel.h"
-#include "utility.h"
-#include <SDL.h>
-#include "SDLauxiliary.h"
 
 using namespace std;
 using glm::vec3;
@@ -20,10 +22,9 @@ using glm::mat3;
 // GLOBAL VARIABLES
 
 /* Screen variables */
-const int SCREEN_WIDTH = 300;
-const int SCREEN_HEIGHT = 300;
+const int SCREEN_WIDTH = 480;
+const int SCREEN_HEIGHT = 240;
 bitmap_image image(SCREEN_WIDTH, SCREEN_HEIGHT);
-SDL_Surface* screen;
 
 /* Time */
 int t;
@@ -59,8 +60,8 @@ vec3 lightColor = 14.f * vec3( 1, 1, 1 );
 vec3 indirectLight = 0.5f*vec3( 1, 1, 1 );
 
 /* Path Tracing Parameters */
-int maxDepth = 10;
-int numSamples = 500;
+int maxDepth;
+int numSamples;
 vec3 buffer[SCREEN_WIDTH][SCREEN_HEIGHT];
 
 // ----------------------------------------------------------------------------
@@ -79,20 +80,37 @@ vec3 TracePath(Ray &r, int depth);
 
 int main( int argc, char* argv[] )
 {
+    if(argc != 3){
+        cerr << "Correct usage: " << argv[0] << " <max-depth> <num-samples>" << endl;
+        return -1;
+    }
+
+    // read inputs
+
+    stringstream ss;
+    ss << argv[1] << " " << argv[2];
+    ss >> maxDepth;
+
+    if(!ss || maxDepth < 0){
+        cerr << "first argument must be a positive integer" << endl;
+        cerr << "Correct usage: " << argv[0] << " <max-depth> <num-samples>" << endl;
+        return -1;
+    }
+
+    ss >> numSamples;
+
+    if(!ss || numSamples < 0){
+        cerr << "second argument must be a positive integer" << endl;
+        cerr << "Correct usage: " << argv[0] << " <max-depth> <num-samples>" << endl;
+        return -1;
+    }
+
 	srand(time(NULL));
 
 	// load model
 	LoadTestModel(triangles);
 
-	screen = InitializeSDL( SCREEN_WIDTH, SCREEN_HEIGHT );
-	t = SDL_GetTicks();	// Set start value for timer.
-
-	// while( NoQuitMessageSDL() )
-	// {
-	// 	Update();
-	// 	Draw();
-	// }
-
+    Update();
 	Draw();
 
 	image.save_image("output.bmp" );
@@ -101,56 +119,6 @@ int main( int argc, char* argv[] )
 
 void Update()
 {
-	// Compute frame time:
-	int t2 = SDL_GetTicks();
-	float dt = float(t2-t);
-	t = t2;
-	cout << "Render time: " << dt << " ms." << endl;
-
-	int x, y;
-	if(SDL_GetMouseState(&x, &y) & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-		YAW(x, dt);
-		PITCH(y, dt);
-	}
-
-	Uint8* keystate = SDL_GetKeyState( 0 );
-
-	if( keystate[SDLK_UP] )
-		lightPos += FORWARD(R) * 0.007f * dt;
-
-	if( keystate[SDLK_DOWN] )
-		lightPos -= FORWARD(R) * 0.007f * dt;
-
-	if( keystate[SDLK_RIGHT] )
-		lightPos += RIGHT(R) * 0.007f * dt;
-
-	if( keystate[SDLK_LEFT] )
-		lightPos -= RIGHT(R) * 0.007f * dt;
-
-	if(keystate[SDLK_w]){
-		cameraPos += FORWARD(R) * 0.007f * dt; // camera Z
-	} 
-	
-	if(keystate[SDLK_s]){
-		cameraPos -= FORWARD(R) * 0.007f * dt; // camera Z
-	} 
-	
-	if(keystate[SDLK_a]){
-		cameraPos -= RIGHT(R) * 0.007f * dt; // camera X
-	} 
-	
-	if(keystate[SDLK_d]){
-		cameraPos += RIGHT(R) * 0.007f * dt; // camera X
-	} 
-	
-	if(keystate[SDLK_q]){
-		cameraPos -= UP(R) * 0.007f * dt; // camera Y
-	} 
-
-	if(keystate[SDLK_e]){
-		cameraPos += UP(R) * 0.007f * dt; // camera Y
-	} 
-
 	Y[0][0] = cos(yaw);
 	Y[0][2] = -sin(yaw);
 	Y[2][0] = sin(yaw);
@@ -170,26 +138,23 @@ void Draw()
 	mat4 cameraToWorld = rotation;
 	cameraToWorld[3] = vec4(cameraPos, 1);
 
+    // scale a "basically unit" image plane according to raster ratio
 	mat2 screenWindow = mat2();
-	screenWindow[0][0] = -1;
-	screenWindow[0][1] = -1; // bottom left corner of window on image plane in screen space
+    float ratio = float(SCREEN_WIDTH)/SCREEN_HEIGHT;
 
-	screenWindow[1][0] = 2;
-	screenWindow[1][1] = 2; // width and height of window on image plane in screen space
+    screenWindow[0][0] = -ratio;
+    screenWindow[0][1] = -1; // bottom left corner of window on image plane in screen space
+
+    screenWindow[1][0] = 2*ratio;
+    screenWindow[1][1] = 2; // width and height of window on image plane in screen space
+	
 
 	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.2, 2.3, 50, image);
 
 	for(int i = 0; i < numSamples; ++i){
 		
 		cout << "Sample " << (i+1) << "/" << numSamples << endl; 
-
-		if(!NoQuitMessageSDL()){
-			return;
-		}
 		
-		if( SDL_MUSTLOCK(screen) )
-			SDL_LockSurface(screen);
-
 		for( int y=0; y<SCREEN_HEIGHT; ++y ){
 			for( int x=0; x<SCREEN_WIDTH; ++x ){
 
@@ -209,14 +174,8 @@ void Draw()
 
 				// cout << "vec4(" << r.d.x << "," << r.d.y << "," << r.d.z << "," << r.d.w << ")" << endl;
 				image.set_pixel(x, y, bmpColor.r, bmpColor.g, bmpColor.b);
-				PutPixelSDL(screen, x, y, buffer[x][y]);
 			}
 		}
-
-		if( SDL_MUSTLOCK(screen) )
-			SDL_UnlockSurface(screen);
-
-		SDL_UpdateRect( screen, 0, 0, 0, 0 );
 	}
 }
 
