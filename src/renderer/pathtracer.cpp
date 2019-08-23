@@ -30,26 +30,16 @@ bitmap_image image(SCREEN_WIDTH, SCREEN_HEIGHT);
 int t;
 
 /* Camera state */ 
-float focalLength = SCREEN_HEIGHT;
+float focalDistance = 0;
+float lensRadius = 0;
 float yaw = 0;
 float pitch = 0;
-
-/* Setters for the pitch and yaw given mouse coordinates relative to the center of screen */
-#define PITCH(x, dt) (pitch += (SCREEN_WIDTH / 2.0f - x) * PI * 0.001f * dt / (SCREEN_WIDTH))
-#define YAW(y, dt) (yaw += (y - SCREEN_HEIGHT / 2.0f) * PI * 0.001f * dt / (SCREEN_HEIGHT))
-
 vec3 cameraPos( 0, 0, -3 );
 
 mat4 rotation;
 mat3 R; // Y * P
 mat3 Y; // Yaw rotation matrix (around y axis)
 mat3 P; // Pitch rotation matrix (around x axis)
-
-/* Directions extracted from given mat3 */
-
-#define FORWARD(R) (R[2])
-#define RIGHT(R) (R[0])
-#define UP(R) (R[1])
 
 /* Model */
 vector<Triangle> triangles;
@@ -105,6 +95,37 @@ int main( int argc, char* argv[] )
         return -1;
     }
 
+    if(!cin.eof()){
+        if(!(cin >> focalDistance)){
+            cerr << "incorrect format of read input" << endl;
+            return -1;
+        }
+        if(!(cin >> lensRadius)){
+            cerr << "incorrect format of read input" << endl;
+            return -1;
+        }
+        if(!(cin >> cameraPos.x)){
+            cerr << "incorrect format of read input" << endl;
+            return -1;
+        }
+        if(!(cin >> cameraPos.y)){
+            cerr << "incorrect format of read input" << endl;
+            return -1;
+        }
+        if(!(cin >> cameraPos.z)){
+            cerr << "incorrect format of read input" << endl;
+            return -1;
+        }
+        if(!(cin >> pitch)){
+            cerr << "incorrect format of read input" << endl;
+            return -1;
+        }
+        if((cin >> yaw).fail()){
+            cerr << "incorrect format of read input" << endl;
+            return -1;
+        }
+    }
+
 	srand(time(NULL));
 
 	// load model
@@ -149,7 +170,7 @@ void Draw()
     screenWindow[1][1] = 2; // width and height of window on image plane in screen space
 	
 
-	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.2, 2.3, 50, image);
+	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, lensRadius, focalDistance, 50, image);
 
 	for(int i = 0; i < numSamples; ++i){
 		
