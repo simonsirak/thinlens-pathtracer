@@ -26,8 +26,8 @@ struct Intersection{
 // GLOBAL VARIABLES
 
 /* Screen variables */
-const int SCREEN_WIDTH = 300;
-const int SCREEN_HEIGHT = 300;
+const int SCREEN_WIDTH = 480;
+const int SCREEN_HEIGHT = 240;
 bitmap_image image(SCREEN_WIDTH, SCREEN_HEIGHT);
 SDL_Surface* screen;
 
@@ -35,15 +35,15 @@ SDL_Surface* screen;
 int t;
 
 /* Camera state */ 
-float focalLength = SCREEN_HEIGHT;
+float focalDistance = 0;
+float lensRadius = 0;
 float yaw = 0;
 float pitch = 0;
+vec3 cameraPos( 0, 0, -3 );
 
 /* Setters for the pitch and yaw given mouse coordinates relative to the center of screen */
-#define PITCH(x, dt) (pitch += (SCREEN_WIDTH / 2.0f - x) * PI * 0.001f * dt / (SCREEN_WIDTH))
-#define YAW(y, dt) (yaw += (y - SCREEN_HEIGHT / 2.0f) * PI * 0.001f * dt / (SCREEN_HEIGHT))
-
-vec3 cameraPos( 0, 0, -3 );
+#define PITCH(y, dt) (pitch += (SCREEN_HEIGHT / 2.0f - y) * PI * 0.001f * dt / (SCREEN_HEIGHT))
+#define YAW(x, dt) (yaw += (x - SCREEN_WIDTH / 2.0f) * PI * 0.001f * dt / (SCREEN_WIDTH))
 
 mat4 rotation;
 mat3 R; // Y * P
@@ -94,17 +94,26 @@ int main( int argc, char* argv[] )
 		Draw();
 	}
 
-	image.save_image("output.bmp" );
+    cout << focalDistance << endl;
+    cout << lensRadius << endl;
+    cout << cameraPos.x << endl;
+    cout << cameraPos.y << endl;
+    cout << cameraPos.z << endl;
+    cout << pitch << endl;
+    cout << yaw << endl;
+	image.save_image("output_debug.bmp" );
+
 	return 0;
 }
 
+// TODO: I THINK YAW AND PITCH ARE FLIPPED
 void Update()
 {
 	// Compute frame time:
 	int t2 = SDL_GetTicks();
 	float dt = float(t2-t);
 	t = t2;
-	cout << "Render time: " << dt << " ms." << endl;
+	// cout << "Render time: " << dt << " ms." << endl;
 
 	int x, y;
 	if(SDL_GetMouseState(&x, &y) & SDL_BUTTON(SDL_BUTTON_LEFT)) {
@@ -114,17 +123,22 @@ void Update()
 
 	Uint8* keystate = SDL_GetKeyState( 0 );
 
-	if( keystate[SDLK_UP] )
-		lightPos += FORWARD(R) * 0.007f * dt;
-
-	if( keystate[SDLK_DOWN] )
-		lightPos -= FORWARD(R) * 0.007f * dt;
-
 	if( keystate[SDLK_RIGHT] )
-		lightPos += RIGHT(R) * 0.007f * dt;
+		lensRadius += 0.007f;
 
 	if( keystate[SDLK_LEFT] )
-		lightPos -= RIGHT(R) * 0.007f * dt;
+		lensRadius -= 0.007f;
+
+	if( keystate[SDLK_UP] )
+		focalDistance += 0.007f;
+
+	if( keystate[SDLK_DOWN] )
+		focalDistance -= 0.007f;
+
+    if(focalDistance < 0)
+        focalDistance = 0;
+    if(lensRadius < 0)
+        lensRadius = 0;
 
 	if(keystate[SDLK_w]){
 		cameraPos += FORWARD(R) * 0.007f * dt; // camera Z
@@ -182,7 +196,7 @@ void Draw()
     screenWindow[1][0] = 2*ratio;
     screenWindow[1][1] = 2; // width and height of window on image plane in screen space
 	
-	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.01, 1, 50, image);
+	Camera* c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, lensRadius, focalDistance, 50, image);
     for( int y=0; y<SCREEN_HEIGHT; ++y )
 	{
 		for( int x=0; x<SCREEN_WIDTH; ++x )

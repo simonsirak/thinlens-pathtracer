@@ -19,9 +19,12 @@ public:
                const mat4 &cameraToScreen, const mat2& screenWindow,
                float shutterOpen, float shutterClose, float lensr, float focald,
                const bitmap_image& film);
+               
 protected:
     mat4 cameraToScreen, rasterToCamera;
     mat4 screenToRaster, rasterToScreen;
+
+public:
     float lensRadius, focalDistance;
 };
 

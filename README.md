@@ -71,6 +71,7 @@ the number of dependencies needed to run the application.
       how the structure of an implementation could
       look like;
     - Theory behind path tracing.
+* [BMP](https://github.com/ArashPartow/bitmap): Very helpful library by Arash Partow that converts in-memory structure to a BMP file.
 * Model: From course [DH2323](https://www.kth.se/student/kurser/kurs/DH2323/?l=en) at KTH.
 * [Wikipedia](https://en.wikipedia.org/wiki/Path_tracing): Naive implementation of path tracing algorithm.
 * [Khan Academy (+Pixar)](https://www.khanacademy.org/partner-content/pixar/virtual-cameras): Intuitive 
