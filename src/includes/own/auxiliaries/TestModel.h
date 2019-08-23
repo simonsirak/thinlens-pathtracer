@@ -15,9 +15,10 @@ public:
 	glm::vec3 v2;
 	glm::vec3 normal;
 	glm::vec3 color;
+	glm::vec3 emittance;
 
-	Triangle( glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 color )
-		: v0(v0), v1(v1), v2(v2), color(color)
+	Triangle( glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 color, glm::vec3 emittance = glm::vec3(0,0,0))
+		: v0(v0), v1(v1), v2(v2), color(color), emittance(emittance)
 	{
 		ComputeNormal();
 	}
@@ -80,10 +81,6 @@ void LoadTestModel( std::vector<Triangle>& triangles )
 	// Ceiling
 	triangles.push_back( Triangle( E, F, G, cyan ) );
 	triangles.push_back( Triangle( F, H, G, cyan ) );
-
-	// Back wall
-	triangles.push_back( Triangle( G, D, C, white ) );
-	triangles.push_back( Triangle( G, H, D, white ) );
 
 	// ---------------------------------------------------------------------------
 	// Short block
@@ -175,6 +172,13 @@ void LoadTestModel( std::vector<Triangle>& triangles )
 
 		triangles[i].ComputeNormal();
 	}
+
+	// vec3 a(-1,-1,-4);
+	// vec3 b(-1,1,-4);
+	// vec3 c(1,1,-4);
+	// vec3 d(1,-1,-4);
+	// triangles.push_back(Triangle(a,b,c,glm::vec3(0,0,0),3.4f*glm::vec3(1,1,1)));
+	// triangles.push_back(Triangle(a,c,d,glm::vec3(0,0,0),3.4f*glm::vec3(1,1,1)));
 }
 
 #endif

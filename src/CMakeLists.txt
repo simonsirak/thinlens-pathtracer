@@ -13,11 +13,12 @@ add_definitions(${GCC_COVERAGE_COMPILE_FLAGS})
 # This will recurse into that dir, run its CMakeLists.txt, 
 # then proceed here.
 add_subdirectory("camera")
+# add_subdirectory("renderer")
 
 # include stuff we wanna include for processing of THIS 
 # CMakeLists.txt
 include_directories("${PROJECT_SOURCE_DIR}/includes/glm")
-include_directories("${PROJECT_SOURCE_DIR}/includes/bmp")
+include_directories("${PROJECT_SOURCE_DIR}/includes/own")
 include_directories("${PROJECT_SOURCE_DIR}/camera")
 
 find_package (SDL)
@@ -31,6 +32,10 @@ if(SDL_FOUND)
 		${SDL_INCLUDE_DIR}
 	)
     # add the executable
-    add_executable(ThinLensPT main.cpp)
-    target_link_libraries(ThinLensPT Camera ${SDL_LIBRARY})
+    add_executable(ThinLensDebug renderer/raytracer.cpp)
+    target_link_libraries(ThinLensDebug Camera ${SDL_LIBRARY})
 endif(SDL_FOUND) 
+
+add_executable(ThinLensRender renderer/pathtracer.cpp)
+target_link_libraries(ThinLensRender Camera)
+

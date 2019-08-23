@@ -30,6 +30,8 @@
 *.exe
 *.out
 *.app
+ThinLensDebug
+ThinLensRender
 
 # CMake
 CMakeLists.txt.user

@@ -1,20 +1,26 @@
-#include <bmp.h>
+#include <bmp/bmp.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <cmath>
 #include <random>
 #include <perspective.h>
-#include "TestModel.h"
-#include "utility.h"
+#include <auxiliaries/TestModel.h>
 #include <SDL.h>
-#include "SDLauxiliary.h"
+#include <auxiliaries/SDLauxiliary.h>
 
 using namespace std;
 using glm::vec3;
 using glm::mat3;
 
 #define PI 3.141592653589793238462643383279502884
+
+// STRUCTS 
+struct Intersection{
+	vec3 position;
+	float distance;
+	int triangleIndex;
+};
 
 // ----------------------------------------------------------------------------
 // GLOBAL VARIABLES
@@ -58,11 +64,6 @@ vec3 lightPos( 0, -0.5, -0.7 );
 vec3 lightColor = 14.f * vec3( 1, 1, 1 );
 vec3 indirectLight = 0.5f*vec3( 1, 1, 1 );
 
-/* Path Tracing Parameters */
-int maxDepth = 10;
-int numSamples = 500;
-vec3 buffer[SCREEN_WIDTH][SCREEN_HEIGHT];
-
 // ----------------------------------------------------------------------------
 // FUNCTIONS
 
@@ -75,7 +76,7 @@ bool ClosestIntersection(
 	Intersection& closestIntersection 
 );
 
-vec3 TracePath(Ray &r, int depth);
+vec3 DirectLight( const Intersection& i );
 
 int main( int argc, char* argv[] )
 {
@@ -87,13 +88,11 @@ int main( int argc, char* argv[] )
 	screen = InitializeSDL( SCREEN_WIDTH, SCREEN_HEIGHT );
 	t = SDL_GetTicks();	// Set start value for timer.
 
-	// while( NoQuitMessageSDL() )
-	// {
-	// 	Update();
-	// 	Draw();
-	// }
-
-	Draw();
+	while( NoQuitMessageSDL() )
+	{
+		Update();
+		Draw();
+	}
 
 	image.save_image("output.bmp" );
 	return 0;
@@ -167,57 +166,61 @@ void Update()
 
 void Draw()
 {
+	if( SDL_MUSTLOCK(screen) )
+		SDL_LockSurface(screen);
+
 	mat4 cameraToWorld = rotation;
 	cameraToWorld[3] = vec4(cameraPos, 1);
 
+	// scale a "basically unit" image plane according to raster ratio
 	mat2 screenWindow = mat2();
-	screenWindow[0][0] = -1;
-	screenWindow[0][1] = -1; // bottom left corner of window on image plane in screen space
+    float ratio = float(SCREEN_WIDTH)/SCREEN_HEIGHT;
 
-	screenWindow[1][0] = 2;
-	screenWindow[1][1] = 2; // width and height of window on image plane in screen space
+    screenWindow[0][0] = -ratio;
+    screenWindow[0][1] = -1; // bottom left corner of window on image plane in screen space
 
-	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.2, 2.3, 50, image);
+    screenWindow[1][0] = 2*ratio;
+    screenWindow[1][1] = 2; // width and height of window on image plane in screen space
+	
+	Camera *c = new PerspectiveCamera(cameraToWorld, screenWindow, 0, 10, 0.01, 1, 50, image);
+    for( int y=0; y<SCREEN_HEIGHT; ++y )
+	{
+		for( int x=0; x<SCREEN_WIDTH; ++x )
+		{
 
-	for(int i = 0; i < numSamples; ++i){
-		
-		cout << "Sample " << (i+1) << "/" << numSamples << endl; 
+			CameraSample sample;
+			sample.pFilm = vec2(x + 0.5, y + 0.5);
+			sample.time = 0;
+			sample.pLens = vec2(rand() / (float)RAND_MAX, rand() / (float)RAND_MAX);
 
-		if(!NoQuitMessageSDL()){
-			return;
-		}
-		
-		if( SDL_MUSTLOCK(screen) )
-			SDL_LockSurface(screen);
+			Ray r;
 
-		for( int y=0; y<SCREEN_HEIGHT; ++y ){
-			for( int x=0; x<SCREEN_WIDTH; ++x ){
+			c->GenerateRay(sample, r);
 
-				CameraSample sample;
-				sample.pFilm = vec2(x + rand() / (float)RAND_MAX, y + rand() / (float)RAND_MAX);
-				sample.time = 0;
-				sample.pLens = vec2(rand() / (float)RAND_MAX, rand() / (float)RAND_MAX);
+			// cout << "vec4(" << r.d.x << "," << r.d.y << "," << r.d.z << "," << r.d.w << ")" << endl;
 
-				Ray r;
+			vec3 color( 0, 0, 0 );
+			Intersection inter;
+			if(ClosestIntersection(vec3(r.o.x, r.o.y, r.o.z), vec3(r.d.x, r.d.y, r.d.z), triangles, inter)){
+                // This is the sequential form of division by numSamples.
+                // connect() calculates a multi-sample estimator from 
+                // the two paths using multiple importance sampling 
+                // with the balance heuristic.
 
-				c->GenerateRay(sample, r);
-
-				vec3 old = buffer[x][y];
-				vec3 color = TracePath(r, 0);
-				buffer[x][y] = (old * float(i) + color)/float(i+1);
-				vec3 bmpColor = glm::clamp(255.f * buffer[x][y], 0, 255);
-
-				// cout << "vec4(" << r.d.x << "," << r.d.y << "," << r.d.z << "," << r.d.w << ")" << endl;
-				image.set_pixel(x, y, bmpColor.r, bmpColor.g, bmpColor.b);
-				PutPixelSDL(screen, x, y, buffer[x][y]);
+                vec3 color = glm::clamp(glm::clamp(255.f * DirectLight(inter), 0, 255.f) + 255.f * triangles[inter.triangleIndex].color * indirectLight, 0, 255);
+                image.set_pixel(x, y, color.r, color.g, color.b);
+				PutPixelSDL(screen, x, y, DirectLight(inter) + triangles[inter.triangleIndex].color * indirectLight);
+			} else {
+                image.set_pixel(x, y, color.r, color.g, color.b);
+				PutPixelSDL(screen, x, y, vec3(0, 0, 0));
 			}
 		}
-
-		if( SDL_MUSTLOCK(screen) )
-			SDL_UnlockSurface(screen);
-
-		SDL_UpdateRect( screen, 0, 0, 0, 0 );
 	}
+
+	if( SDL_MUSTLOCK(screen) )
+		SDL_UnlockSurface(screen);
+
+	SDL_UpdateRect( screen, 0, 0, 0, 0 );
 }
 
 bool ClosestIntersection(
@@ -259,36 +262,48 @@ bool ClosestIntersection(
 	}
 }
 
-vec3 TracePath(Ray &r, int depth) {
-	if (depth >= maxDepth) {
-		return vec3(0,0,0);  // Bounced enough times.
+vec3 DirectLight( const Intersection& i ){
+	
+	// get radius from sphere defined by light position 
+	// and the point of intersection.
+	vec3 radius = (lightPos - i.position);
+	float r2 = glm::length(radius)*glm::length(radius); // r^2
+	radius = glm::normalize(radius); // normalize for future calculations
+
+	vec3 light = lightColor/float(4.0f*PI*r2); // calculate irradiance of light
+
+	/* 
+		calculate normal in direction based on source of ray
+		for the "first ray", it is the camera position that 
+		is the source. However, for multiple bounces you would 
+		need to embed the ray source into the Intersection 
+		struct so that the correct normal can be calculated
+		even when the camera is not the source.
+		This makes the model only take the viewable surface into
+		consideration. Note however that for any given ray source, only 
+		one side of the surface is ever viewable , so this all works 
+		out in the end. Multiple bounces would have different sources,
+		so it is still possible that the other side of a surface can 
+		receive light rays. Just not from light hitting the other side 
+		of the surface.
+	*/
+
+	vec3 sourceToLight = cameraPos - i.position;
+	vec3 normal = glm::dot(sourceToLight, triangles[i.triangleIndex].normal) * triangles[i.triangleIndex].normal / glm::dot(triangles[i.triangleIndex].normal, triangles[i.triangleIndex].normal);
+	normal = glm::normalize(normal);
+
+	/*
+		Direction needs to either always or never be normalised. 
+		Because it is not normalised in the draw function, I 
+		will not normalize here.
+		Also, I use a shadow bias (tiny offset in normal direction)
+		to avoid "shadow acne" which is caused by self-intersection.
+	*/
+
+	Intersection blocker;
+	if(ClosestIntersection(i.position + normal * 0.0001f, (lightPos - i.position), triangles, blocker) && glm::length(blocker.position - i.position) <= glm::length(lightPos-i.position)){
+		return vec3(0, 0, 0);
+	} else {
+		return triangles[i.triangleIndex].color * light * (glm::dot(radius, normal) > 0.0f ? glm::dot(radius, normal) : 0.0f);
 	}
-
-	Intersection i;
-	if (!ClosestIntersection(vec3(r.o.x,r.o.y,r.o.z),vec3(r.d.x,r.d.y,r.d.z),triangles,i)) {
-		return 0.7f*vec3(1,1,1);  // Nothing was hit; everything around you emits white light, e.g while outside
-	}
-
-	Triangle& triangle = triangles[i.triangleIndex];
-	vec3 emittance = triangle.emittance;
-
-	// Pick a random direction from here and keep going.
-	Ray newRay;
-	newRay.o = vec4(i.position,1);
-
-	// This is NOT a cosine-weighted distribution!
-	newRay.d = vec4(uniformHemisphereSample(triangle.normal, 1), 0);
-
-	// Probability of the newRay
-	const float p = uniformHemisphereSamplePDF(1);
-
-	// Compute the BRDF for this ray (assuming Lambertian reflection)
-	float cos_theta = glm::dot(vec3(newRay.d.x,newRay.d.y,newRay.d.z), triangle.normal);
-	vec3 BRDF = triangle.color / float(PI) ; // color == reflectance
-
-	// Recursively trace reflected light sources.
-	vec3 incoming = TracePath(newRay, depth + 1);
-
-	// Apply the Rendering Equation here.
-	return emittance + (BRDF * incoming * cos_theta / p);
 }
