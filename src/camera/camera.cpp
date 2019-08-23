@@ -1,4 +1,4 @@
-#include <camera.h>
+#include "camera.h"
 
 Camera::Camera(const mat4& cameraToWorld, 
             float shutterOpen, 
