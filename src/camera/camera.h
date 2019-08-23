@@ -2,7 +2,7 @@
 #define CAMERA_H
 
 #include <glm/glm.hpp>
-#include <bmp/bmp.h>
+#include <bmp.h>
 
 using glm::mat4;
 using glm::vec2;

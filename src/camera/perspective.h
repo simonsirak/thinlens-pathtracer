@@ -4,7 +4,7 @@
 #include <camera.h>
 #include <projective.h>
 
-#include <bmp/bmp.h>
+#include <bmp.h>
 #include <glm/glm.hpp>
 
 using glm::vec4;
